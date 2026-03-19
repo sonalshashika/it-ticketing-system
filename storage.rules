@@ -1,0 +1,34 @@
+rules_version = '2';
+
+// Craft rules based on data in your Firestore database
+// allow write: if firestore.get(
+//    /databases/(default)/documents/users/$(request.auth.uid)
+// ).data.isAdmin;
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Admins and Staff can read/write everything
+    function isStaff() {
+      return isAuthenticated() && 
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'IT_STAFF'];
+    }
+
+    match /tickets/{ticketId}/{fileName} {
+      // Employees can read their own uploads if they have access to the ticket
+      // For simplicity in storage rules, we allow read if they are authenticated 
+      // (a more strict rule would check the ticket document in firestore)
+      // and allow write if authenticated and size < 5MB
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.resource.size < 5 * 1024 * 1024; // 5MB limit
+      allow delete: if isStaff();
+    }
+    
+    match /{allPaths=**} {
+      allow read, write: if isStaff();
+    }
+  }
+}
